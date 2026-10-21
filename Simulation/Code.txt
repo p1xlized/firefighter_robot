@@ -1,0 +1,56 @@
+/* H-bridge test (L293D)
+
+ARDUINO   L293D(H-bridge)        
+  5          10 (Input 3)
+  6          15 (Input 4)
+  9          7 (Input 2)
+  10         2 (Input 1)
+  5V         1, 9, 16 (Enable 1-4, Power 1)
+  GND        4, 5, 12, 13 (GNDs)
+  
+  - Motor 1 connects to pins 3 (Output 1) & 6 (Output 2)
+  of the H-bridge
+  
+  - Motor 2 connects to pins 11 (Output 3) & 14 (Output 4)
+  of the H-bridge
+  
+  Motor power supply is connected to ground and Power 2
+  and to pin 8 of H-bridge
+
+*/
+int LeftA = 5; 
+int LeftB = 6; 
+int RightA = 9; 
+int RightB = 10; 
+int vel = 100; // Motor speed (0-255)
+
+void setup()  { 
+  pinMode(RightA, OUTPUT);
+  pinMode(RightB, OUTPUT);
+  pinMode(LeftA, OUTPUT);
+  pinMode(LeftB, OUTPUT);
+ } 
+ 
+void loop()  { 
+    analogWrite(RightB, 0);  // Stops the motors
+    analogWrite(RightB, 0); 
+    delay (500);
+    analogWrite(RightA, vel);  // Forward 2 seconds
+    analogWrite(LeftA, vel); 
+    delay (5000);
+   
+    analogWrite(RightA, vel);  // Right 2 seconds
+    analogWrite(LeftA, 0); 
+    delay (5000);
+    
+    analogWrite(RightA, 0);    // Left 2 seconds
+    analogWrite(LeftA, vel); 
+    delay (5000);
+     
+    analogWrite(RightA, 0);    // Stops the motors
+    analogWrite(LeftA, 0);
+    delay (500);
+    analogWrite(RightB, vel);  // Reverse 2 seconds
+    analogWrite(LeftB, vel); 
+    delay (5000);                      
+}
