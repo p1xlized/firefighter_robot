@@ -1,122 +1,128 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+
+import { useEffect, useState } from 'react'
+
+const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+
+type Command = 'F' | 'B' | 'L' | 'R' | 'S'
+
+async function sendCommand(command: Command): Promise<void> {
+  const response = await fetch(`${API_URL}/robot/control`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ command }),
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => null)
+    throw new Error(error?.detail ?? 'Could not control the robot')
+  }
+}
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [status, setStatus] = useState('Ready')
+
+  const control = (command: Command) => {
+    void sendCommand(command)
+      .then(() => setStatus(`Command ${command} sent`))
+      .catch((error: unknown) => {
+        setStatus(error instanceof Error ? error.message : 'Connection failed')
+      })
+  }
+
+  useEffect(() => {
+    const stop = () => control('S')
+    window.addEventListener('blur', stop)
+    return () => window.removeEventListener('blur', stop)
+  })
+
+  const movementButton = (
+    label: string,
+    command: Exclude<Command, 'S'>,
+  ) => (
+    <button
+      type="button"
+      onPointerDown={() => control(command)}
+      onPointerUp={() => control('S')}
+      onPointerLeave={() => control('S')}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') control(command)
+      }}
+    >
+      {label}
+    </button>
+  )
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <main style={styles.page}>
+      <h1>Firefighter Robot</h1>
+      <p style={styles.status}>{status}</p>
 
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+      <section style={styles.layout}>
+        <div style={styles.card}>
+          <h2>Live feed</h2>
+          <img
+            src={`${API_URL}/video_feed`}
+            alt="Live camera feed from the firefighter robot"
+            style={styles.feed}
+          />
         </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
+
+        <div style={styles.card}>
+          <h2>Robot control</h2>
+          <div style={styles.controls}>
+            <span />
+            {movementButton('Forward', 'F')}
+            <span />
+            {movementButton('Left', 'L')}
+            <button type="button" onClick={() => control('S')}>
+              Stop
+            </button>
+            {movementButton('Right', 'R')}
+            <span />
+            {movementButton('Backward', 'B')}
+            <span />
+          </div>
+          <p>Hold a direction button to move. Release it to stop.</p>
         </div>
       </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+    </main>
   )
 }
+
+const styles = {
+  page: {
+    maxWidth: 1100,
+    margin: '0 auto',
+    padding: 24,
+    fontFamily: 'system-ui, sans-serif',
+  },
+  status: {
+    minHeight: 24,
+  },
+  layout: {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(0, 2fr) minmax(260px, 1fr)',
+    gap: 24,
+  },
+  card: {
+    padding: 20,
+    border: '1px solid #ddd',
+    borderRadius: 12,
+  },
+  feed: {
+    display: 'block',
+    width: '100%',
+    minHeight: 240,
+    objectFit: 'cover' as const,
+    background: '#111',
+    borderRadius: 8,
+  },
+  controls: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 1fr)',
+    gap: 12,
+    margin: '32px 0',
+  },
+} as const
 
 export default App
