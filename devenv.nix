@@ -12,6 +12,7 @@
     pkgs.libxcb
     pkgs.libGL
     pkgs.glib
+    pkgs.python314Packages.pyserial
   ] ++ lib.optionals (!pkgs.stdenv.hostPlatform.isAarch64) [
     pkgs.arduino-ide
   ];
