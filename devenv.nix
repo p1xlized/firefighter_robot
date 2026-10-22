@@ -12,7 +12,7 @@
     pkgs.libxcb
     pkgs.libGL
     pkgs.glib
-  ] ++ lib.optionals (!pkgs.stdenv.isAarch64) [
+  ] ++ lib.optionals (!pkgs.stdenv.hostPlatform.isAarch64) [
     pkgs.arduino-ide
   ];
 

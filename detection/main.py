@@ -86,3 +86,8 @@ async def control_robot(payload: RobotCommand):
 @app.get("/")
 def index():
     return {"message": "Robot Stream & Control Server is active!"}
+
+@app.post("/robot/autonomous")
+async def autonomous_mode(payload: RobotCommand):
+    """Send commands to the Arduino for autonomous mode"""
+  #TODO: Implement autonomous mode logic here, similar to control_robot
