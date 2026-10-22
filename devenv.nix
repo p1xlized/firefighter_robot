@@ -24,5 +24,9 @@
       uv.enable = true;
       venv.enable = true;
     };
+    javascript = {
+      enable = true;
+      nodejs.enable = true;
+    };
   };
 }
