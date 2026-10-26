@@ -6,6 +6,9 @@
 #define LeftMotorDirPin1  7    //Left Motor direction pin 1 to MODEL-X IN3 
 #define LeftMotorDirPin2  8   //Left Motor direction pin 1 to MODEL-X IN4 
 
+// Ultrasonic Sensor Pins
+#define TrigPin A0  // Trigger pin is Input for ultrasonic sensor
+#define EchoPin A1  // Echo pin is Output for ultrasonic sensor
 
 /*motor control*/
 void go_Advance(void)  //Forward
@@ -61,6 +64,22 @@ void set_Motorspeed(int speed_L,int speed_R)
   analogWrite(speedPinR,speed_R);   
 }
 
+/* Measure distance in centimeters */
+int getDistance()
+{
+  digitalWrite(TrigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TrigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TrigPin, LOW);
+  
+  long duration = pulseIn(EchoPin, HIGH, 30000); // Timeout after 30ms (~5 meters)
+  if (duration == 0) return 400; // Return max range if no echo received
+  
+  int distance = duration * 0.034 / 2; // Calculate distance in cm
+  return distance;
+}
+
 //Pins initialize
 void init_GPIO()
 {
@@ -70,7 +89,11 @@ void init_GPIO()
  
 	pinMode(LeftMotorDirPin1, OUTPUT);
   pinMode(LeftMotorDirPin2, OUTPUT); 
-  pinMode(speedPinR, OUTPUT); 
+  pinMode(speedPinR, OUTPUT);
+  
+  pinMode(TrigPin, OUTPUT);
+  pinMode(EchoPin, INPUT);
+
 	stop_Stop();
 }
 
@@ -84,8 +107,16 @@ void setup()
 void loop(){
   if (Serial.available() > 0) {
     char command = Serial.read();
-    if (command == 'F') go_Advance();
-    else if (command == 'B') go_Back();
+
+    if (command == 'F') {
+      if (getDistance() < 20) {
+        go_Advance();
+      } else {
+
+      }stop_Stop();
+      Serial.println("Obstacle in the way! Cannot move forward.")
+  
+    } else if (command == 'B') go_Back();
     else if (command == 'L') go_Left();
     else if (command == 'R') go_Right();
     else if (command == 'S') stop_Stop();
