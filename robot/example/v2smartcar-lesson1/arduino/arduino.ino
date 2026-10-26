@@ -112,10 +112,9 @@ void loop(){
       if (getDistance() < 20) {   // Obstacle detected
         go_Advance();
       } else {
-
-      }stop_Stop();
-      Serial.println("Obstacle in the way! Cannot move forward.")
-  
+        stop_Stop();
+        Serial.println("Obstacle in the way! Cannot move forward.");
+      }
     } else if (command == 'B') go_Back();
     else if (command == 'L') go_Left();
     else if (command == 'R') go_Right();
