@@ -15,6 +15,8 @@
     pkgs.python314Packages.numpy
     pkgs.python314Packages.opencv4
     pkgs.python314Packages.pyserial
+    pkgs.python314Packages.fastapi
+    pkgs.python314Packages.uvicorn
   ] ++ lib.optionals (!pkgs.stdenv.hostPlatform.isAarch64) [
     pkgs.arduino-ide
   ];
