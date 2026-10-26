@@ -17,11 +17,18 @@ def main() -> None:
     ser.write_timeout = 1
 
     # CRITICAL: Wait 2 seconds for the Arduino to finish rebooting and booting up
-    time.sleep(2)
+    time.sleep(0.5)
 
     # Now send the commands safely
     ser.write(b'B\n')
+    time.sleep(0.5)  # Wait for Arduino to process the command
     ser.write(b'F\n')
+    time.sleep(0.5)  # Wait for Arduino to process the command
+    ser.write(b'L\n')
+    time.sleep(0.5)  # Wait for Arduino to process the command
+    ser.write(b'R\n')
+    time.sleep(0.5)  # Wait for Arduino to process the command
+    ser.write(b'S\n')
     ser.flush()
 
     # Read the response from Arduino
