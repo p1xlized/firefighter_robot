@@ -21,7 +21,7 @@
       enable = true;
       venv = {
         enable = true;
-        requirements = ./raspberry/requirement.txt; # Correct location for requirements.txt
+        requirements = ./raspberry/requirements.txt; # Correct location for requirements.txt
       };
     };
     javascript = {
