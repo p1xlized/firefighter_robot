@@ -10,6 +10,9 @@
 #define TrigPin A0  // Trigger pin is Input for ultrasonic sensor
 #define EchoPin A1  // Echo pin is Output for ultrasonic sensor
 
+// State tracking variable
+bool isMovingForward = false;
+
 /*motor control*/
 void go_Advance(void)  //Forward
 {
@@ -105,25 +108,38 @@ void setup()
 }
 
 void loop(){
+  if (isMovingForward) {
+    if (getDistance() < 20) {
+      stop_Stop();
+      isMovingForward = false;
+      Serial.println("Obstacle encountered while moving! Emergency stop.");
+    }
+  }
   if (Serial.available() > 0) {
     char command = Serial.read();
 
     if (command == 'F') {
-      if (getDistance() < 20) {   // Obstacle detected
+      if (getDistance() > 20) {
         go_Advance();
+        isMovingForward = true;
       } else {
         stop_Stop();
-        Serial.println("Obstacle in the way! Cannot move forward.");
+        isMovingForward = false;
+        Serial.println("Obstacle in the way");
       }
-    } else if (command == 'B') go_Back();
-    else if (command == 'L') go_Left();
-    else if (command == 'R') go_Right();
-    else if (command == 'S') stop_Stop();
+        
+    } else if (command == 'B') go_Back(), isMovingForward = false;
+    else if (command == 'L') go_Left(), isMovingForward = false;
+    else if (command == 'R') go_Right(), isMovingForward = false;
+    else if (command == 'S') stop_Stop(), isMovingForward = false;
     else if (command == 'D') {    // DEBUG for ultrasonic sensor distance measure
       int currentDistance = getDistance();
       Serial.print("Distance: ");
       Serial.print(currentDistance);
       Serial.println(" cm");
+      if (getDistance() < 20) {
+        Serial.println("Obstacle in the way");
+      }
     } 
   }
   
