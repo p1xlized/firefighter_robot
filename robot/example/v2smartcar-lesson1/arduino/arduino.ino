@@ -74,9 +74,9 @@ int getDistance()
   digitalWrite(TrigPin, LOW);
   
   long duration = pulseIn(EchoPin, HIGH, 30000); // Timeout after 30ms (~5 meters)
-  if (duration == 0) return 400; // Return max range if no echo received
+  if (duration == 0) return 500; // Return max range if no echo received
   
-  int distance = duration * 0.034 / 2; // Calculate distance in cm
+  int distance = duration * 0.034 / 2; // Calculate distance in cm. Speed of sound=340 m/s or 0.034 cm/microseconds.
   return distance;
 }
 
@@ -119,5 +119,13 @@ void loop(){
     else if (command == 'L') go_Left();
     else if (command == 'R') go_Right();
     else if (command == 'S') stop_Stop();
+    else if (command == 'D') {    // DEBUG for ultrasonic sensor distance measure
+      int currentDistance = getDistance();
+      Serial.print("Distance: ");
+      Serial.print(currentDistance);
+      Serial.println(" cm");
+    } 
   }
+  
+  
 }
