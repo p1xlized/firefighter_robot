@@ -109,7 +109,7 @@ void loop(){
     char command = Serial.read();
 
     if (command == 'F') {
-      if (getDistance() < 20) {
+      if (getDistance() < 20) {   // Obstacle detected
         go_Advance();
       } else {
 
