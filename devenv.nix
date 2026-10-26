@@ -12,7 +12,6 @@
     pkgs.libGL
     pkgs.glib
     pkgs.libcamera
-    pkgs.opencv
   ] ++ lib.optionals (!pkgs.stdenv.hostPlatform.isAarch64) [
     pkgs.arduino-ide
   ];
@@ -20,11 +19,10 @@
   languages = {
     python = {
       enable = true;
-      uv = {
+      venv = {
         enable = true;
-        requirements = "raspberry/requirement.txt";
+        requirements = ./raspberry/requirement.txt; # Correct location for requirements.txt
       };
-      venv.enable = true;
     };
     javascript = {
       enable = true;
