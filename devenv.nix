@@ -26,11 +26,12 @@
         requirements = ./requirements.txt;
       };
     };
+
     javascript = {
       enable = true;
       nodejs.enable = true;
     };
-  };
+
 
   # Hook that runs automatically when you enter `devenv shell`
 
