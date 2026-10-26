@@ -1,5 +1,8 @@
 numpy
 opencv-python
 pyserial
-# Install Picamera2 with apt on Raspberry Pi OS:
+pycamera
+
+# Note: If your script uses picamera2 for Raspberry Pi hardware,
+# remember it requires the system package:
 # sudo apt install -y python3-picamera2

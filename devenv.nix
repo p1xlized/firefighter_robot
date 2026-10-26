@@ -19,11 +19,12 @@
     pkgs.arduino-ide
   ];
 
-  languages = {
-    python = {
+  languages.python = {
       enable = true;
-      # Disable default auto-venv so we can manage it with system-site-packages
-      venv.enable = false;
+      venv = {
+        enable = true;
+        requirements = ./requirements.txt;
+      };
     };
     javascript = {
       enable = true;
@@ -32,16 +33,14 @@
   };
 
   # Hook that runs automatically when you enter `devenv shell`
-  enterShell = ''
-    # Export system paths so libcamera and other Raspberry Pi binaries work
-    export PATH="$PATH:/usr/bin:/usr/sbin"
 
-    # Create a local virtual environment with system site-packages enabled (links to apt-installed picamera2)
-    if [ ! -d ".venv" ]; then
-      python3 -m venv --system-site-packages .venv
-    fi
 
-    # Activate the virtual environment automatically
-    source .venv/bin/activate
-  '';
+    # Automatically create a symbolic link from .venv in your project root
+    # to devenv's internal state directory for seamless IDE and tool integration
+    enterShell = ''
+      if [ -d "$DEVENV_STATE/venv" ]; then
+        ln -sfn "$DEVENV_STATE/venv" .venv
+        echo "Linked .venv -> $DEVENV_State/venv"
+      fi
+    '';
 }
