@@ -12,6 +12,7 @@
     pkgs.libGL
     pkgs.glib
     pkgs.libcamera
+    pkgs.opencv
   ] ++ lib.optionals (!pkgs.stdenv.hostPlatform.isAarch64) [
     pkgs.arduino-ide
   ];
@@ -21,7 +22,7 @@
       enable = true;
       uv = {
         enable = true;
-        requirements = "raspberry/requirement.txt"; # Pointing to the correct subfolder
+        requirements = "raspberry/requirement.txt";
       };
       venv.enable = true;
     };

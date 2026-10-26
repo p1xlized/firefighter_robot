@@ -1,5 +1,6 @@
 """Application entry point."""
 import argparse
+import os
 import time
 
 import cv2
@@ -31,69 +32,59 @@ def movement_test(port: str) -> None:
     print("Movement test complete.")
 
 
-def camera_test(source: int, use_picamera: bool) -> None:
-    """Preview a CSI camera through Picamera2 or a USB camera through OpenCV."""
-    picamera = None
-    capture = None
+def camera_test(source: int) -> None:
+    """Preview the camera using OpenCV V4L2 (compatible with Pi camera via libcamera wrapper)."""
+    capture = cv2.VideoCapture(source, cv2.CAP_V4L2)
+    if not capture.isOpened():
+        raise RuntimeError(f"Unable to open camera /dev/video{source}")
 
-    if use_picamera:
-        try:
-            from picamera2 import Picamera2
-        except ImportError as error:
-            raise RuntimeError(
-                "Picamera2 is not installed. Run: sudo apt install -y python3-picamera2"
-            ) from error
+    capture.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+    capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
-        picamera = Picamera2()
-        picamera.configure(picamera.create_preview_configuration(main={"format": "BGR888"}))
-        picamera.start()
-    else:
-        capture = cv2.VideoCapture(source, cv2.CAP_V4L2)
-        if not capture.isOpened():
-            raise RuntimeError(f"Unable to open camera /dev/video{source}")
-        capture.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-        capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    has_display = os.environ.get("DISPLAY") is not None
+    if not has_display:
+        print("WARNING: No graphical display (DISPLAY environment variable) detected.")
+        print("cv2.imshow will be disabled. Running in headless mode.")
 
-    print("Camera preview started. Press q to quit.")
+    print("Camera preview started. Press 'q' in the window to quit (or Ctrl+C in terminal).")
     try:
         while True:
-            frame = picamera.capture_array() if picamera else capture.read()[1]
-            if frame is None:
+            ret, frame = capture.read()
+            if not ret or frame is None:
                 print("Camera returned no frame.")
                 break
 
-            cv2.imshow("Raspberry Pi camera", frame)
-            if cv2.waitKey(1) & 0xFF == ord("q"):
-                break
+            if has_display:
+                cv2.imshow("Raspberry Pi camera", frame)
+                if cv2.waitKey(1) & 0xFF == ord("q"):
+                    break
+            else:
+                time.sleep(0.03)
+
+    except KeyboardInterrupt:
+        print("\nStopping camera preview...")
     finally:
-        if picamera:
-            picamera.stop()
-            picamera.close()
-        if capture:
-            capture.release()
-        cv2.destroyAllWindows()
+        capture.release()
+        if has_display:
+            cv2.destroyAllWindows()
 
 
 def test() -> None:
-    parser = argparse.ArgumentParser(description="Fire detection robot - Movement Test")
+    parser = argparse.ArgumentParser(description="Fire detection robot - Movement & Camera Test")
     parser.add_argument(
         "--arduino-port",
         default="/dev/ttyACM0",
         help="Serial port, for example /dev/ttyACM0 or /dev/ttyUSB0",
     )
     parser.add_argument("--camera", action="store_true", help="Preview the camera")
-    parser.add_argument("--camera-source", type=int, default=0, help="USB camera index")
-    parser.add_argument(
-        "--picamera",
-        action="store_true",
-        help="Use a Raspberry Pi CSI camera through Picamera2",
-    )
+    parser.add_argument("--camera-source", type=int, default=0, help="Camera device index")
     args = parser.parse_args()
 
     if args.camera:
-        camera_test(args.camera_source, args.picamera)
+        camera_test(args.camera_source)
     else:
         movement_test(args.arduino_port)
+
 
 if __name__ == "__main__":
     test()
