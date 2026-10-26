@@ -8,7 +8,7 @@ import cv2
 import serial
 import uvicorn
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 
 CAMERA_SOURCE = 0
@@ -98,9 +98,26 @@ def generate_frames():
             )
 
 
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 def health():
-    return {"status": "ok", "camera": camera is not None, "arduino": arduino is not None}
+    return """<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Firefighter Robot Camera</title>
+    <style>
+      body { margin: 0; padding: 2rem; background: #111; color: #fff;
+             font: 1rem system-ui, sans-serif; text-align: center; }
+      img { display: block; width: min(100%, 960px); margin: 1rem auto;
+            border: 2px solid #444; border-radius: 8px; }
+    </style>
+  </head>
+  <body>
+    <h1>Firefighter Robot Camera</h1>
+    <img src="/video_feed" alt="Live camera feed">
+  </body>
+</html>"""
 
 
 @app.get("/video_feed")
