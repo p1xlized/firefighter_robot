@@ -20,7 +20,7 @@
     enable = true;
     venv = {
       enable = true;
-      requirements = ./requirements.txt;
+      requirements = ./raspberry/requirements.txt;
     };
   };
 
