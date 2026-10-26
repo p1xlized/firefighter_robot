@@ -7,33 +7,31 @@
 {
   packages = [
     pkgs.arduino-cli
-    pkgs.opencv
     pkgs.zlib
     pkgs.libxcb
     pkgs.libGL
     pkgs.glib
+    pkgs.libcamera
   ] ++ lib.optionals (!pkgs.stdenv.hostPlatform.isAarch64) [
     pkgs.arduino-ide
   ];
 
-  languages.python = {
-    enable = true;
-    venv = {
+  languages = {
+    python = {
       enable = true;
-      requirements = ./raspberry/requirements.txt;
+      uv = {
+        enable = true;
+        requirements = "raspberry/requirement.txt"; # Pointing to the correct subfolder
+      };
+      venv.enable = true;
+    };
+    javascript = {
+      enable = true;
+      nodejs.enable = true;
     };
   };
 
-  languages.javascript = {
-    enable = true;
-    nodejs.enable = true;
-  };
-
-  # Hook that runs automatically when you enter `devenv shell`
   enterShell = ''
-    if [ -d "$DEVENV_STATE/venv" ]; then
-      ln -sfn "$DEVENV_STATE/venv" .venv
-      echo "Linked .venv -> $DEVENV_STATE/venv"
-    fi
+    export PATH="$PATH:/usr/bin:/usr/sbin"
   '';
 }
