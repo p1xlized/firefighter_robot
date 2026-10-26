@@ -1,0 +1,5 @@
+numpy
+opencv-python
+pyserial
+# Install Picamera2 with apt on Raspberry Pi OS:
+# sudo apt install -y python3-picamera2
