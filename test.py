@@ -1,5 +1,6 @@
 """Application entry point."""
 import argparse
+import time
 import serial
 
 def main() -> None:
@@ -11,15 +12,22 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    # Use the path provided via command-line argument
+    # Open the serial port (this triggers an Arduino reboot)
     ser = serial.Serial(args.arduino_port, 9600, timeout=1)
     ser.write_timeout = 1
 
+    # CRITICAL: Wait 2 seconds for the Arduino to finish rebooting and booting up
+    time.sleep(2)
+
+    # Now send the commands safely
     ser.write(b'B\n')
     ser.write(b'F\n')
     ser.flush()
 
-    print(ser.readline().decode().strip())
+    # Read the response from Arduino
+    response = ser.readline().decode().strip()
+    print(f"Received: {response}")
+
     ser.close()
 
 if __name__ == "__main__":
