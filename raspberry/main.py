@@ -1,5 +1,7 @@
 """Raspberry Pi camera stream and robot API."""
 import argparse
+import shutil
+import subprocess
 import time
 from contextlib import asynccontextmanager
 from threading import Lock
@@ -17,6 +19,7 @@ BAUD_RATE = 9600
 ALLOWED_COMMANDS = {"F", "B", "L", "R", "S"}
 
 camera: cv2.VideoCapture | None = None
+camera_process: subprocess.Popen[bytes] | None = None
 arduino: serial.Serial | None = None
 camera_lock = Lock()
 
@@ -27,16 +30,34 @@ class RobotCommand(BaseModel):
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    global camera, arduino
+    global camera, camera_process, arduino
 
-    camera = cv2.VideoCapture(CAMERA_SOURCE, cv2.CAP_V4L2)
-    if not camera.isOpened():
-        camera.release()
-        camera = None
-        print(f"Warning: unable to open camera /dev/video{CAMERA_SOURCE}")
-    else:
-        camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    rpicam = shutil.which("rpicam-vid") or shutil.which("libcamera-vid")
+    if rpicam:
+        camera_process = subprocess.Popen(
+            [
+                rpicam, "--timeout", "0", "--nopreview", "--codec", "mjpeg",
+                "--inline", "--width", "640", "--height", "480",
+                "--framerate", "15", "--quality", "80", "--output", "-",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        )
+        time.sleep(1)
+        if camera_process.poll() is not None:
+            camera_process = None
+        else:
+            print(f"Raspberry Pi camera started with {rpicam}")
+
+    if camera_process is None:
+        camera = cv2.VideoCapture(CAMERA_SOURCE, cv2.CAP_V4L2)
+        if not camera.isOpened():
+            camera.release()
+            camera = None
+            print(f"Warning: unable to open USB camera /dev/video{CAMERA_SOURCE}")
+        else:
+            camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
     try:
         arduino = serial.Serial(ARDUINO_PORT, BAUD_RATE, timeout=1, write_timeout=1)
@@ -51,6 +72,9 @@ async def lifespan(_: FastAPI):
         arduino.close()
     if camera:
         camera.release()
+    if camera_process:
+        camera_process.terminate()
+        camera_process.wait(timeout=3)
 
 
 app = FastAPI(title="Firefighter Robot", lifespan=lifespan)
@@ -82,6 +106,24 @@ def movement_test(port: str) -> None:
 
 
 def generate_frames():
+    if camera_process and camera_process.stdout:
+        jpeg_data = b""
+        while camera_process.poll() is None:
+            chunk = camera_process.stdout.read(4096)
+            if not chunk:
+                break
+            jpeg_data += chunk
+            while b"\xff\xd8" in jpeg_data and b"\xff\xd9" in jpeg_data:
+                start = jpeg_data.index(b"\xff\xd8")
+                end = jpeg_data.index(b"\xff\xd9", start) + 2
+                yield (
+                    b"--frame\r\nContent-Type: image/jpeg\r\n\r\n"
+                    + jpeg_data[start:end]
+                    + b"\r\n"
+                )
+                jpeg_data = jpeg_data[end:]
+        return
+
     if camera is None:
         return
     while camera.isOpened():
@@ -144,7 +186,7 @@ def video_feed():
 
 @app.get("/stream")
 def camera_stream():
-    if camera is None:
+    if camera is None and camera_process is None:
         raise HTTPException(status_code=503, detail="Camera is unavailable")
     return StreamingResponse(
         generate_frames(),
