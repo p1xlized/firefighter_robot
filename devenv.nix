@@ -22,13 +22,25 @@
   ];
 
   languages = {
-    python = {
-      enable = true;
-      venv = {
-        enable = true;
-        requirements = ./raspberry/requirements.txt; # Correct location for requirements.txt
-      };
-    };
+
+        python = {
+          enable = true;
+          # Use withPackages to bundle system-level hardware libraries like gpiozero
+          package = pkgs.python314.withPackages (ps: [
+            ps.gpiozero
+            ps.rpi-lgpio
+            ps.numpy
+            ps.opencv4
+            ps.pyserial
+            ps.fastapi
+            ps.uvicorn
+          ]);
+          venv = {
+            enable = true;
+            requirements = ./raspberry/requirements.txt;
+          };
+        };
+
     javascript = {
       enable = true;
       nodejs.enable = true;
