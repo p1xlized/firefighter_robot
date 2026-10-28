@@ -1,13 +1,29 @@
-from gpiozero import DigitalOutputDevice
-from time import sleep
+import RPi.GPIO as GPIO
+import time
 
-# Initialize the relay on GPIO 22
-# active_high=False accounts for active-LOW relay modules (clicks on LOW signal)
-pump = DigitalOutputDevice(2, active_high=False)
+# Set up GPIO
+GPIO.setmode(GPIO.BCM)
+relay_pin = 17
+GPIO.setup(relay_pin, GPIO.OUT)
 
-print("Starting water pump for 5 seconds...")
-pump.on()   # Turns the relay on -> pump runs
-sleep(5)
+# Function to turn on the motor
+def turn_on_motor():
+    GPIO.output(relay_pin, GPIO.HIGH)
+    print("Motor ON")
 
-print("Stopping water pump.")
-pump.off()  # Turns the relay off -> pump stops
+# Function to turn off the motor
+def turn_off_motor():
+    GPIO.output(relay_pin, GPIO.LOW)
+    print("Motor OFF")
+
+try:
+    # Main loop
+    while True:
+        turn_on_motor()
+        time.sleep(1)  # Run the motor
+        turn_off_motor()
+        time.sleep(2)  # Wait before turning on again
+except KeyboardInterrupt:
+    # Clean up GPIO on keyboard interrupt
+    GPIO.cleanup()
+    print("\nGPIO cleaned up. Exiting.")
