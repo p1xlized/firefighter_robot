@@ -40,11 +40,10 @@
             requirements = ./raspberry/requirements.txt;
           };
         };
+javascript.enable = true;
+javascript.pnpm.enable = true;
 
-    javascript = {
-      enable = true;
-      nodejs.enable = true;
-    };
+
   };
 
   enterShell = ''
