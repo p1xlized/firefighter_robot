@@ -9,7 +9,10 @@ from typing import Protocol
 import cv2
 import numpy as np
 
-from raspberry.pump import turn_off_pump_motor
+try:
+    from .pump import turn_off_pump_motor
+except ImportError:
+    from pump import turn_off_pump_motor
 
 MIN_FIRE_AREA = 800
 FOUND_AREA_RATIO = 0.20
