@@ -1,233 +1,102 @@
-"""Raspberry Pi camera stream and robot API."""
-import argparse
-import shutil
-import subprocess
-import time
-from contextlib import asynccontextmanager
-from threading import Lock
+"""Headless fire detection and Arduino movement control for Raspberry Pi."""
 
-import cv2
+import argparse
+import time
+
 import serial
-import uvicorn
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse, StreamingResponse
-from pydantic import BaseModel
+
+try:
+    from .detection import detect_fire
+    from .pump import test_pump
+except ImportError:
+    from detection import detect_fire
+    from pump import test_pump
 
 CAMERA_SOURCE = 0
 ARDUINO_PORT = "/dev/ttyACM0"
 BAUD_RATE = 9600
-ALLOWED_COMMANDS = {"F", "B", "L", "R", "S"}
-
-camera: cv2.VideoCapture | None = None
-camera_process: subprocess.Popen[bytes] | None = None
-arduino: serial.Serial | None = None
-camera_lock = Lock()
 
 
-class RobotCommand(BaseModel):
-    command: str
+class Robot:
+    def __init__(self, port: str) -> None:
+        self.serial = serial.Serial(port, BAUD_RATE, timeout=1, write_timeout=1)
+        time.sleep(2)
 
+    def move(self, command: str) -> None:
+        if command not in {"F", "B", "L", "R", "S"}:
+            raise ValueError("Command must be F, B, L, R, or S")
+        self.serial.write(f"{command}\n".encode("ascii"))
+        self.serial.flush()
 
-@asynccontextmanager
-async def lifespan(_: FastAPI):
-    global camera, camera_process, arduino
+    def read_serial(self) -> list[str]:
+        messages = []
+        while self.serial.in_waiting:
+            message = self.serial.readline().decode("utf-8", errors="replace").strip()
+            if message:
+                messages.append(message)
+                print(f"Arduino: {message}")
+        return messages
 
-    rpicam = shutil.which("rpicam-vid") or shutil.which("libcamera-vid")
-    if rpicam:
-        camera_process = subprocess.Popen(
-            [
-                rpicam, "--timeout", "0", "--nopreview", "--codec", "mjpeg",
-                "--inline", "--width", "640", "--height", "480",
-                "--framerate", "15", "--quality", "80", "--output", "-",
-            ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-        )
-        time.sleep(1)
-        if camera_process.poll() is not None:
-            camera_process = None
-        else:
-            print(f"Raspberry Pi camera started with {rpicam}")
+    def close(self) -> None:
+        if self.serial.is_open:
+            self.move("S")
+            self.serial.close()
 
-    if camera_process is None:
-        camera = cv2.VideoCapture(CAMERA_SOURCE, cv2.CAP_V4L2)
-        if not camera.isOpened():
-            camera.release()
-            camera = None
-            print(f"Warning: unable to open USB camera /dev/video{CAMERA_SOURCE}")
-        else:
-            camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-            camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-
-    try:
-        arduino = serial.Serial(ARDUINO_PORT, BAUD_RATE, timeout=1, write_timeout=1)
-        print(f"Arduino connected on {ARDUINO_PORT}")
-    except serial.SerialException as error:
-        print(f"Warning: Arduino unavailable: {error}")
-
-    yield
-
-    if arduino and arduino.is_open:
-        arduino.write(b"S\n")
-        arduino.close()
-    if camera:
-        camera.release()
-    if camera_process:
-        camera_process.terminate()
-        camera_process.wait(timeout=3)
-
-
-app = FastAPI(title="Firefighter Robot", lifespan=lifespan)
-
+    def autonomous_drive(self, camera_source: int, display: bool) -> None:
+        detect_fire(self, camera_source, display)
 
 def movement_test(port: str) -> None:
-    """Verify that the Arduino receives all movement commands."""
-    ser = serial.Serial(port, 9600, timeout=1, write_timeout=1)
-    print("Waiting for Arduino to boot...")
-    time.sleep(2.0)
-
-    commands = [
-        (b"B\n", "Backwards"),
-        (b"F\n", "Forwards"),
-        (b"L\n", "Left"),
-        (b"R\n", "Right"),
-        (b"S\n", "Stop"),
-    ]
+    robot = Robot(port)
     try:
-        for command, name in commands:
-            print(f"Sending {name} ({command.decode().strip()})...")
-            ser.write(command)
-            ser.flush()
+        for command, name in (
+            ("B", "Backwards"),
+            ("F", "Forwards"),
+            ("L", "Left"),
+            ("R", "Right"),
+            ("S", "Stop"),
+        ):
+            print(f"Sending {name} ({command})")
+            robot.move(command)
             time.sleep(0.5)
     finally:
-        ser.write(b"S\n")
-        ser.close()
+        robot.close()
     print("Movement test complete.")
 
 
-def generate_frames():
-    if camera_process and camera_process.stdout:
-        jpeg_data = b""
-        while camera_process.poll() is None:
-            chunk = camera_process.stdout.read(4096)
-            if not chunk:
-                break
-            jpeg_data += chunk
-            while b"\xff\xd8" in jpeg_data and b"\xff\xd9" in jpeg_data:
-                start = jpeg_data.index(b"\xff\xd8")
-                end = jpeg_data.index(b"\xff\xd9", start) + 2
-                yield (
-                    b"--frame\r\nContent-Type: image/jpeg\r\n\r\n"
-                    + jpeg_data[start:end]
-                    + b"\r\n"
-                )
-                jpeg_data = jpeg_data[end:]
-        return
-
-    if camera is None:
-        return
-    while camera.isOpened():
-        with camera_lock:
-            success, frame = camera.read()
-        if not success:
-            continue
-        encoded, buffer = cv2.imencode(".jpg", frame)
-        if encoded:
-            yield (
-                b"--frame\r\nContent-Type: image/jpeg\r\n\r\n"
-                + buffer.tobytes()
-                + b"\r\n"
-            )
-
-
-@app.get("/", response_class=HTMLResponse)
-def health():
-    return """<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Firefighter Robot Camera</title>
-    <style>
-      body { margin: 0; padding: 2rem; background: #111; color: #fff;
-             font: 1rem system-ui, sans-serif; text-align: center; }
-      img { display: block; width: min(100%, 960px); margin: 1rem auto;
-            border: 2px solid #444; border-radius: 8px; }
-    </style>
-  </head>
-  <body>
-    <h1>Firefighter Robot Camera</h1>
-    <img src="/stream" alt="Live camera feed">
-  </body>
-</html>"""
-
-
-@app.get("/video_feed", response_class=HTMLResponse)
-def video_feed():
-    return """<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Firefighter Robot Camera</title>
-    <style>
-      body { margin: 0; padding: 2rem; background: #111; color: #fff;
-             font: 1rem system-ui, sans-serif; text-align: center; }
-      img { display: block; width: min(100%, 960px); margin: 1rem auto;
-            border: 2px solid #444; border-radius: 8px; }
-    </style>
-  </head>
-  <body>
-    <h1>Firefighter Robot Camera</h1>
-    <img src="/stream" alt="Live camera feed">
-  </body>
-</html>"""
-
-
-@app.get("/stream")
-def camera_stream():
-    if camera is None and camera_process is None:
-        raise HTTPException(status_code=503, detail="Camera is unavailable")
-    return StreamingResponse(
-        generate_frames(),
-        media_type="multipart/x-mixed-replace; boundary=frame",
-    )
-
-
-@app.post("/robot/control")
-def control_robot(payload: RobotCommand):
-    command = payload.command.strip().upper()
-    if command not in ALLOWED_COMMANDS:
-        raise HTTPException(status_code=400, detail="Command must be F, B, L, R, or S")
-    if arduino is None or not arduino.is_open:
-        raise HTTPException(status_code=503, detail="Arduino is unavailable")
-    try:
-        arduino.write(f"{command}\n".encode("ascii"))
-        arduino.flush()
-    except serial.SerialException as error:
-        raise HTTPException(status_code=503, detail=str(error)) from error
-    return {"status": "success", "sent": command}
-
-
 def main() -> None:
-    global ARDUINO_PORT
-
-    parser = argparse.ArgumentParser(description="Firefighter robot camera API")
-    parser.add_argument("--test", action="store_true", help="Run the Arduino movement test and exit")
-    parser.add_argument(
-        "--arduino-port",
-        default=ARDUINO_PORT,
-        help="Serial port, for example /dev/ttyACM0 or /dev/ttyUSB0",
-    )
-    parser.add_argument("--host", default="0.0.0.0")
-    parser.add_argument("--port", type=int, default=8000)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--test", action="store_true", help="Run the Arduino movement test")
+    parser.add_argument("--move", choices=("F", "B", "L", "R", "S"), help="Send one movement command")
+    parser.add_argument("--test-pump", action="store_true", help="Run the pump test")
+    parser.add_argument("--arduino-port", default=ARDUINO_PORT)
+    parser.add_argument("--camera-source", type=int, default=CAMERA_SOURCE)
+    parser.add_argument("--display", action="store_true", help="Show a preview when a desktop is available")
+    parser.add_argument("--no-stream", action="store_true", help="Disable the MediaMTX camera stream")
     args = parser.parse_args()
 
-    ARDUINO_PORT = args.arduino_port
     if args.test:
         movement_test(args.arduino_port)
-    else:
-        uvicorn.run(app, host=args.host, port=args.port)
+        return
+    if args.test_pump:
+        test_pump()
+        return
+
+    robot = Robot(args.arduino_port)
+    try:
+        if args.move:
+            robot.move(args.move)
+        else:
+            print("Starting fire detection...")
+            detect_fire(
+                robot,
+                args.camera_source,
+                args.display,
+                stream=not args.no_stream,
+            )
+    except KeyboardInterrupt:
+        print("\nStopping.")
+    finally:
+        robot.close()
 
 
 if __name__ == "__main__":
