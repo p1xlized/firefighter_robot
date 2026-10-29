@@ -215,6 +215,7 @@ def detect_fire(
                     if not found:
                         print("FOUND: fire is in front of the robot.")
                         found = True
+
                 elif offset < 0:
                     command = "L"
                     status = "Aligning left"

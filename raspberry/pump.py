@@ -5,12 +5,12 @@ GPIO.setmode(GPIO.BCM)
 relay_pin = 17
 GPIO.setup(relay_pin, GPIO.OUT)
 
-def turn_on_motor():
+def turn_on_pump_motor():
     GPIO.output(relay_pin, GPIO.HIGH)
     print("Motor ON")
 
 
-def turn_off_motor():
+def turn_off_pump_motor():
     GPIO.output(relay_pin, GPIO.LOW)
     print("Motor OFF")
 
@@ -19,9 +19,9 @@ def test_pump():
     try:
         # Main loop
         while True:
-            turn_on_motor()
+            turn_on_pump_motor()
             time.sleep(1)  # Run the motor
-            turn_off_motor()
+            turn_off_pump_motor()
             time.sleep(2)  # Wait before turning on again
     except KeyboardInterrupt:
         # Clean up GPIO on keyboard interrupt
