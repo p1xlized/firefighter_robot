@@ -9,10 +9,14 @@ from typing import Protocol
 import cv2
 import numpy as np
 
+from raspberry.pump import turn_off_pump_motor
+
 MIN_FIRE_AREA = 800
 FOUND_AREA_RATIO = 0.20
 CENTER_TOLERANCE_RATIO = 0.10
 SCAN_SECONDS = 0.8
+SEARCH_TURN_SECONDS = 1.2
+PUBLISH_RETRY_SECONDS = 2.0
 LOWER_FIRE = np.array([18, 50, 50], dtype=np.uint8)
 UPPER_FIRE = np.array([35, 255, 255], dtype=np.uint8)
 
@@ -29,6 +33,8 @@ class MediaMtxPublisher:
     def __init__(self, path: str = "fire", width: int = 640, height: int = 480) -> None:
         self.server = None
         self.publisher = None
+        self.path = path
+        self.last_retry = 0.0
         self.width = width
         self.height = height
         if not shutil.which("mediamtx") or not shutil.which("ffmpeg"):
@@ -40,39 +46,61 @@ class MediaMtxPublisher:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        time.sleep(0.5)
+        time.sleep(1.0)
+        self._start_publisher()
+        print(f"MediaMTX WebRTC stream: http://<raspberry-pi-ip>:8889/{path}")
+
+    def _start_publisher(self) -> None:
+        if self.publisher is not None:
+            return
         self.publisher = subprocess.Popen(
             [
                 "ffmpeg", "-loglevel", "error",
                 "-f", "rawvideo", "-pix_fmt", "bgr24",
-                "-video_size", f"{width}x{height}", "-framerate", "15",
+                "-video_size", f"{self.width}x{self.height}", "-framerate", "15",
                 "-i", "-", "-an", "-c:v", "libx264", "-preset", "ultrafast",
                 "-tune", "zerolatency", "-pix_fmt", "yuv420p",
                 "-f", "rtsp", "-rtsp_transport", "tcp",
-                f"rtsp://127.0.0.1:8554/{path}",
+                f"rtsp://127.0.0.1:8554/{self.path}",
             ],
             stdin=subprocess.PIPE,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        print(f"MediaMTX stream: http://<raspberry-pi-ip>:8889/{path}")
 
     def publish(self, frame: np.ndarray) -> None:
-        if self.publisher is None or self.publisher.stdin is None:
+        if self.server is None or self.server.poll() is not None:
+            return
+        if self.publisher is None or self.publisher.poll() is not None:
+            now = time.monotonic()
+            if now - self.last_retry < PUBLISH_RETRY_SECONDS:
+                return
+            self.last_retry = now
+            if self.publisher is not None:
+                self.publisher.wait()
+                self.publisher = None
+            self._start_publisher()
+        if self.publisher.stdin is None:
             return
         frame = cv2.resize(frame, (self.width, self.height))
         try:
             self.publisher.stdin.write(frame.tobytes())
         except (BrokenPipeError, OSError):
-            self.close()
+            self._stop_publisher()
+
+    def _stop_publisher(self) -> None:
+        if self.publisher is None:
+            return
+        if self.publisher.stdin:
+            self.publisher.stdin.close()
+        if self.publisher.poll() is None:
+            self.publisher.terminate()
+        self.publisher.wait(timeout=3)
+        self.publisher = None
 
     def close(self) -> None:
         if self.publisher:
-            if self.publisher.stdin:
-                self.publisher.stdin.close()
-            self.publisher.terminate()
-            self.publisher.wait(timeout=3)
-            self.publisher = None
+            self._stop_publisher()
         if self.server:
             self.server.terminate()
             self.server.wait(timeout=3)
@@ -185,6 +213,8 @@ def detect_fire(
     print("Fire detection started. Press Ctrl+C to stop.")
     last_command = None
     found = False
+    search_direction = "L"
+    search_started = time.monotonic()
     publisher = MediaMtxPublisher() if stream else None
 
     try:
@@ -196,6 +226,7 @@ def detect_fire(
                 print("Obstacle detected. Scanning for the best route.")
                 scan_for_fire(robot, frames)
                 last_command = "S"
+                search_started = time.monotonic()
                 continue
 
             height, width = frame.shape[:2]
@@ -214,7 +245,11 @@ def detect_fire(
                     status = "FOUND"
                     if not found:
                         print("FOUND: fire is in front of the robot.")
+                        turn_off_pump_motor()
                         found = True
+                        time.sleep(10.0)
+                        turn_off_pump_motor()
+                        found = False
 
                 elif offset < 0:
                     command = "L"
@@ -230,6 +265,11 @@ def detect_fire(
                     found = False
             else:
                 found = False
+                if time.monotonic() - search_started >= SEARCH_TURN_SECONDS:
+                    search_direction = "R" if search_direction == "L" else "L"
+                    search_started = time.monotonic()
+                command = search_direction
+                status = f"Searching ({search_direction})"
 
             if command != last_command:
                 robot.move(command)

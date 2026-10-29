@@ -1,21 +1,32 @@
-import RPi.GPIO as GPIO
 import time
 
-GPIO.setmode(GPIO.BCM)
-relay_pin = 17
-GPIO.setup(relay_pin, GPIO.OUT)
+try:
+    import RPi.GPIO as GPIO
+except (ImportError, RuntimeError):
+    GPIO = None
+
+RELAY_PIN = 17
+
+
+def _setup_gpio() -> None:
+    if GPIO is None:
+        raise RuntimeError("RPi.GPIO is required on the Raspberry Pi")
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setup(RELAY_PIN, GPIO.OUT, initial=GPIO.LOW)
 
 def turn_on_pump_motor():
-    GPIO.output(relay_pin, GPIO.HIGH)
+    _setup_gpio()
+    GPIO.output(RELAY_PIN, GPIO.HIGH)
     print("Motor ON")
 
 
 def turn_off_pump_motor():
-    GPIO.output(relay_pin, GPIO.LOW)
+    if GPIO is not None:
+        GPIO.output(RELAY_PIN, GPIO.LOW)
     print("Motor OFF")
 
 def test_pump():
-
+    _setup_gpio()
     try:
         # Main loop
         while True:
