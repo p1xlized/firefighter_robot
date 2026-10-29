@@ -9,7 +9,10 @@ from typing import Protocol
 import cv2
 import numpy as np
 
-from raspberry.pump import turn_off_pump_motor
+try:
+    from .pump import turn_off_pump_motor
+except ImportError:
+    from pump import turn_off_pump_motor
 
 MIN_FIRE_AREA = 800
 FOUND_AREA_RATIO = 0.20
@@ -291,5 +294,26 @@ def detect_fire(
     finally:
         if publisher:
             publisher.close()
+        if display:
+            cv2.destroyAllWindows()
+
+
+def camera_test(source: int, display: bool = False) -> None:
+    """Capture the camera and publish it without requiring an Arduino."""
+    camera_command = shutil.which("rpicam-vid") or shutil.which("libcamera-vid")
+    frames = rpicam_frames(camera_command) if camera_command else usb_frames(source)
+    publisher = MediaMtxPublisher(path="camera")
+    print("Camera test started.")
+    print("MediaMTX WebRTC stream: http://<raspberry-pi-ip>:8889/camera")
+
+    try:
+        for frame in frames:
+            publisher.publish(frame)
+            if display:
+                cv2.imshow("Camera test", frame)
+                if cv2.waitKey(1) & 0xFF == ord("q"):
+                    break
+    finally:
+        publisher.close()
         if display:
             cv2.destroyAllWindows()

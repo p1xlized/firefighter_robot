@@ -6,10 +6,10 @@ import time
 import serial
 
 try:
-    from .detection import detect_fire
+    from .detection import camera_test, detect_fire
     from .pump import test_pump
 except ImportError:
-    from detection import detect_fire
+    from detection import camera_test, detect_fire
     from pump import test_pump
 
 CAMERA_SOURCE = 0
@@ -68,6 +68,11 @@ def main() -> None:
     parser.add_argument("--test", action="store_true", help="Run the Arduino movement test")
     parser.add_argument("--move", choices=("F", "B", "L", "R", "S"), help="Send one movement command")
     parser.add_argument("--test-pump", action="store_true", help="Run the pump test")
+    parser.add_argument(
+        "--camera-test",
+        action="store_true",
+        help="Test the camera and stream it through MediaMTX without Arduino",
+    )
     parser.add_argument("--arduino-port", default=ARDUINO_PORT)
     parser.add_argument("--camera-source", type=int, default=CAMERA_SOURCE)
     parser.add_argument("--display", action="store_true", help="Show a preview when a desktop is available")
@@ -79,6 +84,9 @@ def main() -> None:
         return
     if args.test_pump:
         test_pump()
+        return
+    if args.camera_test:
+        camera_test(args.camera_source, args.display)
         return
 
     robot = Robot(args.arduino_port)

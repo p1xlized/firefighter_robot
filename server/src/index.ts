@@ -1,7 +1,7 @@
 import { Elysia } from 'elysia'
 import { node } from '@elysia/node'
 
-const mediaMtxUrl = 'http://127.0.0.1:8889/fire'
+const mediaMtxUrl = 'http://10.143.21.7:8889/fire'
 
 const app = new Elysia({ adapter: node() })
 	.get('/', () => 'Firefighter robot server')
