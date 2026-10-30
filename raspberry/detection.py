@@ -21,7 +21,10 @@ MIN_FIRE_AREA = 800
 FOUND_AREA_RATIO = 0.20
 CENTER_TOLERANCE_RATIO = 0.10
 OBSTACLE_SCAN_SECONDS = 15.0
-SCAN_STEP_SECONDS = 1.0
+SCAN_STEP_SECONDS = 2.0
+PERIODIC_SCAN_SECONDS = 15.0
+STEERING_SPEED = 2
+FORWARD_SPEED = 2
 PUBLISH_RETRY_SECONDS = 2.0
 FIRE_PIXEL_THRESHOLD = 15_000
 MEDIAMTX_CONFIG = os.path.join(os.path.dirname(__file__), "mediamtx.yml")
@@ -234,9 +237,10 @@ def notify_fire() -> None:
 
 def scan_for_fire(robot: RobotController, frames: Iterator[np.ndarray]) -> str:
     """Scan for up to 15 seconds, slowly, then choose the strongest direction."""
+    robot.move("S")
     scores: dict[str, float] = {}
     for direction in ("L", "R"):
-        robot.move("1")
+        robot.move(str(STEERING_SPEED))
         robot.move(direction)
         deadline = time.monotonic() + OBSTACLE_SCAN_SECONDS / 2
         score = 0.0
@@ -252,7 +256,7 @@ def scan_for_fire(robot: RobotController, frames: Iterator[np.ndarray]) -> str:
 
     direction = max(scores, key=lambda candidate: scores[candidate])
     print(f"Obstacle avoidance: turning {direction} (fire scores: {scores})")
-    robot.move("1")
+    robot.move(str(STEERING_SPEED))
     robot.move(direction)
     time.sleep(SCAN_STEP_SECONDS)
     robot.move("S")
@@ -271,6 +275,7 @@ def detect_fire(
     last_command: tuple[str, int] | None = None
     found = False
     fire_reported = False
+    next_periodic_scan = time.monotonic() + PERIODIC_SCAN_SECONDS
     publisher = MediaMtxPublisher(path="camera") if stream else None
 
     try:
@@ -282,6 +287,7 @@ def detect_fire(
                 print("Obstacle detected. Scanning for the best route.")
                 scan_for_fire(robot, frames)
                 last_command = ("S", 2)
+                next_periodic_scan = time.monotonic() + PERIODIC_SCAN_SECONDS
                 continue
 
             height, width = frame.shape[:2]
@@ -326,14 +332,25 @@ def detect_fire(
                 found = False
                 status = "Driving forward (no fire target)"
 
-            speed = 1 if command in {"L", "R"} else 2
+            if (
+                center is None
+                and time.monotonic() >= next_periodic_scan
+            ):
+                print("No fire target. Stopping briefly to scan.")
+                scan_for_fire(robot, frames)
+                last_command = ("S", FORWARD_SPEED)
+                next_periodic_scan = time.monotonic() + PERIODIC_SCAN_SECONDS
+                command = "F"
+                status = "Resuming forward search"
+
+            speed = STEERING_SPEED if command in {"L", "R"} else FORWARD_SPEED
             command_state = (command, speed)
             if command_state != last_command:
                 robot.move(str(speed))
                 robot.move(command)
                 last_command = command_state
 
-            preview = cv2.bitwise_and(frame, frame, mask=mask)
+            preview = frame.copy()
             if center is not None:
                 cv2.circle(preview, center, 8, (255, 255, 255), -1)
             cv2.putText(

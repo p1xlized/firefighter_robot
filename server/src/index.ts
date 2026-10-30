@@ -3,7 +3,7 @@ import { node } from '@elysia/node'
 import { cors } from '@elysiajs/cors'
 
 // MediaMTX's WebRTC page is supported directly by Chrome.
-const mediaMtxUrl = 'http://10.143.21.7:8889/camera'
+const mediaMtxUrl = 'http://10.143.21.13:8889/camera'
 
 const app = new Elysia({ adapter: node() })
 	.use(cors({
