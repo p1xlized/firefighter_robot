@@ -9,9 +9,12 @@
 #define TrigPin A0  // Trigger pin
 #define EchoPin A1  // Echo pin
 
+// Buzzer Pin
+#define BuzzerPin A3
+
 // State & Speed tracking variables
 bool isMovingForward = false;
-int carSpeed = 200;                // Default speed
+int carSpeed = 200;                 // Default speed
 unsigned long lastPrintTime = 0;
 const unsigned long printInterval = 500; // Print telemetry every 500ms
 
@@ -86,6 +89,16 @@ int getDistance()
   return distance;
 }
 
+/* Activate active buzzer */
+void activate_buzzer(int durationMs)
+{
+  digitalWrite(BuzzerPin, HIGH);
+  Serial.println("Buzzer ON");
+  delay(durationMs);
+  digitalWrite(BuzzerPin, LOW);
+  Serial.println("Buzzer OFF");
+}
+
 // Pins initialize
 void init_GPIO()
 {
@@ -99,6 +112,10 @@ void init_GPIO()
 
   pinMode(TrigPin, OUTPUT);
   pinMode(EchoPin, INPUT);
+
+  // Initialize Buzzer Pin
+  pinMode(BuzzerPin, OUTPUT);
+  digitalWrite(BuzzerPin, LOW);
 
   stop_Stop();
 }
@@ -152,6 +169,11 @@ void loop()
     else if (command == 'L') { go_Left(); isMovingForward = false; }
     else if (command == 'R') { go_Right(); isMovingForward = false; }
     else if (command == 'S') { stop_Stop(); isMovingForward = false; }
+
+    // Buzzer Command (Type 'V' to beep)
+    else if (command == 'V') {
+      activate_buzzer(500);
+    }
 
     // Speed level commands (1 to 3)
     else if (command == '1') {
