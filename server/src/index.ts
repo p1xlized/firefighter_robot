@@ -1,9 +1,14 @@
 import { Elysia } from 'elysia'
 import { node } from '@elysia/node'
+import { cors } from '@elysiajs/cors'
 
 const mediaMtxUrl = 'http://10.143.21.7:8889/camera'
 
 const app = new Elysia({ adapter: node() })
+	.use(cors({
+		origin: true,
+		credentials: true,
+	}))
 	.get('/', () => 'Firefighter robot server')
 	.get('/video-feed', () => new Response(`<!doctype html>
 <html lang="en">
