@@ -25,9 +25,10 @@ STEERING_SPEED = 2
 FORWARD_SPEED = 2
 PUBLISH_RETRY_SECONDS = 2.0
 FIRE_PIXEL_THRESHOLD = 15_000
+FIRE_CONFIRM_FRAMES = 4
 MEDIAMTX_CONFIG = os.path.join(os.path.dirname(__file__), "mediamtx.yml")
-LOWER_FIRE = np.array([18, 50, 50], dtype=np.uint8)
-UPPER_FIRE = np.array([35, 255, 255], dtype=np.uint8)
+LOWER_FIRE = np.array([5, 100, 100], dtype=np.uint8)
+UPPER_FIRE = np.array([22, 255, 255], dtype=np.uint8)
 _email_started = False
 _notification_lock = threading.Lock()
 
@@ -173,6 +174,14 @@ def analyze_fire(frame: np.ndarray) -> tuple[np.ndarray, tuple[int, int] | None,
     blurred = cv2.GaussianBlur(frame, (21, 21), 0)
     hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
     mask = cv2.inRange(hsv, LOWER_FIRE, UPPER_FIRE)
+    blue, green, red = cv2.split(blurred)
+    red_dominant = (red > green * 1.12) & (red > blue * 1.5)
+    mask = cv2.bitwise_and(mask, mask, mask=red_dominant.astype(np.uint8) * 255)
+    mask = cv2.morphologyEx(
+        mask,
+        cv2.MORPH_OPEN,
+        np.ones((5, 5), dtype=np.uint8),
+    )
     contours, _ = cv2.findContours(
         mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
     )
@@ -272,6 +281,7 @@ def detect_fire(
     print("Fire detection started. Press Ctrl+C to stop.")
     last_command: tuple[str, int] | None = None
     fire_reported = False
+    fire_confirmations = 0
     pump_active = False
     next_periodic_scan = time.monotonic() + PERIODIC_SCAN_SECONDS
     publisher = MediaMtxPublisher(path="camera") if stream else None
@@ -295,13 +305,22 @@ def detect_fire(
             status = "Driving forward"
             if fire_pixels <= FIRE_PIXEL_THRESHOLD:
                 fire_reported = False
-            if fire_pixels > FIRE_PIXEL_THRESHOLD and not fire_reported:
+                fire_confirmations = 0
+            elif fire_pixels > FIRE_PIXEL_THRESHOLD:
+                fire_confirmations += 1
+            else:
+                fire_confirmations = 0
+            if (
+                fire_confirmations >= FIRE_CONFIRM_FRAMES
+                and not fire_reported
+            ):
                 robot.move("S")
                 robot.move("V")
                 notify_fire()
                 turn_on_pump_motor()
                 pump_active = True
                 fire_reported = True
+                fire_confirmations = 0
                 print("Fire detected. Extinguishing for 20 seconds.")
                 time.sleep(20.0)
                 turn_off_pump_motor()
