@@ -24,10 +24,10 @@ python -m raspberry.main --move F     # Send one movement command
 python -m raspberry.main --no-stream  # Disable MediaMTX publishing
 ```
 
-The Raspberry Pi camera is published to MediaMTX as `fire`. The WebRTC stream is available at:
+The Raspberry Pi camera is always published to MediaMTX as `camera`. The WebRTC stream is available at:
 
 ```text
-http://<raspberry-pi-ip>:8889/fire
+http://<raspberry-pi-ip>:8889/camera
 ```
 
 ## Elysia server

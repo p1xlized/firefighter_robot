@@ -34,7 +34,7 @@ class RobotController(Protocol):
 class MediaMtxPublisher:
     """Publish annotated OpenCV frames to MediaMTX through RTSP."""
 
-    def __init__(self, path: str = "fire", width: int = 640, height: int = 480) -> None:
+    def __init__(self, path: str = "camera", width: int = 640, height: int = 480) -> None:
         self.server = None
         self.publisher = None
         self.path = path
@@ -223,7 +223,7 @@ def detect_fire(
     found = False
     search_direction = "L"
     search_started = time.monotonic()
-    publisher = MediaMtxPublisher() if stream else None
+    publisher = MediaMtxPublisher(path="camera") if stream else None
 
     try:
         for frame in frames:
