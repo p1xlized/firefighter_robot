@@ -13,9 +13,9 @@ import cv2
 import numpy as np
 
 try:
-    from .pump import turn_off_pump_motor
+    from .pump import turn_off_pump_motor, turn_on_pump_motor
 except ImportError:
-    from pump import turn_off_pump_motor
+    from pump import turn_off_pump_motor, turn_on_pump_motor
 
 MIN_FIRE_AREA = 800
 FOUND_AREA_RATIO = 0.20
@@ -275,6 +275,7 @@ def detect_fire(
     last_command: tuple[str, int] | None = None
     found = False
     fire_reported = False
+    pump_active = False
     next_periodic_scan = time.monotonic() + PERIODIC_SCAN_SECONDS
     publisher = MediaMtxPublisher(path="camera") if stream else None
 
@@ -297,9 +298,14 @@ def detect_fire(
             status = "Driving forward"
             if fire_pixels <= FIRE_PIXEL_THRESHOLD:
                 fire_reported = False
+                if pump_active:
+                    turn_off_pump_motor()
+                    pump_active = False
             if fire_pixels > FIRE_PIXEL_THRESHOLD and not fire_reported:
                 robot.move("V")
                 notify_fire()
+                turn_on_pump_motor()
+                pump_active = True
                 fire_reported = True
 
             if center is not None:
@@ -313,7 +319,6 @@ def detect_fire(
                     status = "FOUND"
                     if not found:
                         print("FOUND: fire is in front of the robot.")
-                        turn_off_pump_motor()
                         found = True
 
                 elif offset < 0:
@@ -332,10 +337,7 @@ def detect_fire(
                 found = False
                 status = "Driving forward (no fire target)"
 
-            if (
-                center is None
-                and time.monotonic() >= next_periodic_scan
-            ):
+            if center is None and time.monotonic() >= next_periodic_scan:
                 print("No fire target. Stopping briefly to scan.")
                 scan_for_fire(robot, frames)
                 last_command = ("S", FORWARD_SPEED)
@@ -364,6 +366,8 @@ def detect_fire(
                 if cv2.waitKey(1) & 0xFF == ord("q"):
                     break
     finally:
+        if pump_active:
+            turn_off_pump_motor()
         if publisher:
             publisher.close()
         if display:

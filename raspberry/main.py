@@ -20,11 +20,16 @@ BAUD_RATE = 9600
 class Robot:
     def __init__(self, port: str) -> None:
         self.serial = serial.Serial(port, BAUD_RATE, timeout=1, write_timeout=1)
+        self._speed_command: str | None = None
         time.sleep(2)
 
     def move(self, command: str) -> None:
         if command not in {"F", "B", "L", "R", "S", "V", "1", "2", "3"}:
             raise ValueError("Command must be F, B, L, R, S, V, 1, 2, or 3")
+        if command in {"1", "2", "3"}:
+            if command == self._speed_command:
+                return
+            self._speed_command = command
         self.serial.write(f"{command}\n".encode("ascii"))
         self.serial.flush()
 
