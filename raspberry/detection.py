@@ -18,8 +18,6 @@ except ImportError:
     from pump import turn_off_pump_motor, turn_on_pump_motor
 
 MIN_FIRE_AREA = 800
-FOUND_AREA_RATIO = 0.20
-CENTER_TOLERANCE_RATIO = 0.10
 OBSTACLE_SCAN_SECONDS = 15.0
 SCAN_STEP_SECONDS = 2.0
 PERIODIC_SCAN_SECONDS = 15.0
@@ -273,7 +271,6 @@ def detect_fire(
     frames = rpicam_frames(camera_command) if camera_command else usb_frames(source)
     print("Fire detection started. Press Ctrl+C to stop.")
     last_command: tuple[str, int] | None = None
-    found = False
     fire_reported = False
     pump_active = False
     next_periodic_scan = time.monotonic() + PERIODIC_SCAN_SECONDS
@@ -298,43 +295,35 @@ def detect_fire(
             status = "Driving forward"
             if fire_pixels <= FIRE_PIXEL_THRESHOLD:
                 fire_reported = False
-                if pump_active:
-                    turn_off_pump_motor()
-                    pump_active = False
             if fire_pixels > FIRE_PIXEL_THRESHOLD and not fire_reported:
+                robot.move("S")
                 robot.move("V")
                 notify_fire()
                 turn_on_pump_motor()
                 pump_active = True
                 fire_reported = True
+                print("Fire detected. Extinguishing for 20 seconds.")
+                time.sleep(20.0)
+                turn_off_pump_motor()
+                pump_active = False
+                print("Extinguishing complete. Resuming forward movement.")
 
-            if center is not None:
+            if fire_reported:
+                command = "F"
+                status = "Moving forward after extinguishing"
+            elif center is not None:
                 center_x = center[0]
                 offset = center_x - width // 2
-                centered = abs(offset) <= width * CENTER_TOLERANCE_RATIO
-                close_enough = area >= width * height * FOUND_AREA_RATIO
-
-                if close_enough and centered:
-                    command = "S"
-                    status = "FOUND"
-                    if not found:
-                        print("FOUND: fire is in front of the robot.")
-                        found = True
-
-                elif offset < 0:
+                if offset < 0:
                     command = "L"
                     status = "Aligning left"
-                    found = False
                 elif offset > 0:
                     command = "R"
                     status = "Aligning right"
-                    found = False
                 else:
                     command = "F"
                     status = "Driving forward"
-                    found = False
             else:
-                found = False
                 status = "Driving forward (no fire target)"
 
             if center is None and time.monotonic() >= next_periodic_scan:

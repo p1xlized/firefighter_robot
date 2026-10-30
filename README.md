@@ -38,6 +38,8 @@ export FIRE_ALERT_RECIPIENT=operator@example.com
 The detector drives forward when no fire target is visible. If the Arduino
 reports an obstacle, it slowly scans left and right for up to 15 seconds,
 chooses the stronger fire direction, and then resumes forward movement.
+When fire is detected, it stops, activates the pump for 20 seconds, and then
+resumes forward movement.
 
 The Raspberry Pi camera is always published to MediaMTX as `camera`. The WebRTC stream is available at:
 
