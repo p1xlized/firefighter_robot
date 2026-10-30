@@ -3,9 +3,12 @@
 import shutil
 import subprocess
 import time
+import os
+import smtplib
+import threading
 from collections.abc import Iterator
 from typing import Protocol
-import os
+
 import cv2
 import numpy as np
 
@@ -17,12 +20,15 @@ except ImportError:
 MIN_FIRE_AREA = 800
 FOUND_AREA_RATIO = 0.20
 CENTER_TOLERANCE_RATIO = 0.10
-SCAN_SECONDS = 0.8
-SEARCH_TURN_SECONDS = 1.2
+OBSTACLE_SCAN_SECONDS = 15.0
+SCAN_STEP_SECONDS = 1.0
 PUBLISH_RETRY_SECONDS = 2.0
+FIRE_PIXEL_THRESHOLD = 15_000
 MEDIAMTX_CONFIG = os.path.join(os.path.dirname(__file__), "mediamtx.yml")
 LOWER_FIRE = np.array([18, 50, 50], dtype=np.uint8)
 UPPER_FIRE = np.array([35, 255, 255], dtype=np.uint8)
+_email_started = False
+_notification_lock = threading.Lock()
 
 
 class RobotController(Protocol):
@@ -185,13 +191,54 @@ def analyze_fire(frame: np.ndarray) -> tuple[np.ndarray, tuple[int, int] | None,
     return mask, center, area
 
 
+def _send_fire_email() -> None:
+    host = os.getenv("FIRE_SMTP_HOST", "smtp.gmail.com")
+    try:
+        port = int(os.getenv("FIRE_SMTP_PORT", "587"))
+    except ValueError as error:
+        print(f"Fire email disabled: invalid FIRE_SMTP_PORT ({error}).")
+        return
+    username = os.getenv("FIRE_SMTP_USERNAME")
+    password = os.getenv("FIRE_SMTP_PASSWORD")
+    recipient = os.getenv("FIRE_ALERT_RECIPIENT")
+    if not all((username, password, recipient)):
+        print(
+            "Fire email disabled: set FIRE_SMTP_USERNAME, "
+            "FIRE_SMTP_PASSWORD, and FIRE_ALERT_RECIPIENT."
+        )
+        return
+    try:
+        with smtplib.SMTP(host, port, timeout=15) as server:
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
+            server.login(username, password)
+            server.sendmail(
+                username,
+                recipient.lower(),
+                "Subject: Fire warning\n\nA fire has been detected by the robot.",
+            )
+        print(f"Fire warning sent to {recipient.lower()}.")
+    except (OSError, smtplib.SMTPException) as error:
+        print(f"Fire email failed: {error}")
+
+
+def notify_fire() -> None:
+    """Start one email notification for the current fire event."""
+    global _email_started
+    with _notification_lock:
+        if not _email_started:
+            threading.Thread(target=_send_fire_email, daemon=True).start()
+            _email_started = True
+
+
 def scan_for_fire(robot: RobotController, frames: Iterator[np.ndarray]) -> str:
-    """Turn both ways briefly and choose the side with the strongest target."""
+    """Scan for up to 15 seconds, slowly, then choose the strongest direction."""
     scores: dict[str, float] = {}
     for direction in ("L", "R"):
         robot.move("1")
         robot.move(direction)
-        deadline = time.monotonic() + SCAN_SECONDS
+        deadline = time.monotonic() + OBSTACLE_SCAN_SECONDS / 2
         score = 0.0
         while time.monotonic() < deadline:
             try:
@@ -207,7 +254,7 @@ def scan_for_fire(robot: RobotController, frames: Iterator[np.ndarray]) -> str:
     print(f"Obstacle avoidance: turning {direction} (fire scores: {scores})")
     robot.move("1")
     robot.move(direction)
-    time.sleep(SCAN_SECONDS)
+    time.sleep(SCAN_STEP_SECONDS)
     robot.move("S")
     return direction
 
@@ -223,8 +270,7 @@ def detect_fire(
     print("Fire detection started. Press Ctrl+C to stop.")
     last_command: tuple[str, int] | None = None
     found = False
-    search_direction = "L"
-    search_started = time.monotonic()
+    fire_reported = False
     publisher = MediaMtxPublisher(path="camera") if stream else None
 
     try:
@@ -236,13 +282,19 @@ def detect_fire(
                 print("Obstacle detected. Scanning for the best route.")
                 scan_for_fire(robot, frames)
                 last_command = ("S", 2)
-                search_started = time.monotonic()
                 continue
 
             height, width = frame.shape[:2]
             mask, center, area = analyze_fire(frame)
-            command = "S"
-            status = "Searching"
+            fire_pixels = cv2.countNonZero(mask)
+            command = "F"
+            status = "Driving forward"
+            if fire_pixels <= FIRE_PIXEL_THRESHOLD:
+                fire_reported = False
+            if fire_pixels > FIRE_PIXEL_THRESHOLD and not fire_reported:
+                robot.move("V")
+                notify_fire()
+                fire_reported = True
 
             if center is not None:
                 center_x = center[0]
@@ -257,9 +309,6 @@ def detect_fire(
                         print("FOUND: fire is in front of the robot.")
                         turn_off_pump_motor()
                         found = True
-                        time.sleep(10.0)
-                        turn_off_pump_motor()
-                        found = False
 
                 elif offset < 0:
                     command = "L"
@@ -275,11 +324,7 @@ def detect_fire(
                     found = False
             else:
                 found = False
-                if time.monotonic() - search_started >= SEARCH_TURN_SECONDS:
-                    search_direction = "R" if search_direction == "L" else "L"
-                    search_started = time.monotonic()
-                command = search_direction
-                status = f"Searching ({search_direction})"
+                status = "Driving forward (no fire target)"
 
             speed = 1 if command in {"L", "R"} else 2
             command_state = (command, speed)

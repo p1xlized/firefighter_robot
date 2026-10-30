@@ -23,8 +23,8 @@ class Robot:
         time.sleep(2)
 
     def move(self, command: str) -> None:
-        if command not in {"F", "B", "L", "R", "S", "1", "2", "3"}:
-            raise ValueError("Command must be F, B, L, R, S, 1, 2, or 3")
+        if command not in {"F", "B", "L", "R", "S", "V", "1", "2", "3"}:
+            raise ValueError("Command must be F, B, L, R, S, V, 1, 2, or 3")
         self.serial.write(f"{command}\n".encode("ascii"))
         self.serial.flush()
 
@@ -73,7 +73,7 @@ def main() -> None:
     parser.add_argument("--test", action="store_true", help="Run the Arduino movement test")
     parser.add_argument(
         "--move",
-        choices=("F", "B", "L", "R", "S", "1", "2", "3"),
+        choices=("F", "B", "L", "R", "S", "V", "1", "2", "3"),
         help="Send one movement or speed command",
     )
     parser.add_argument("--test-pump", action="store_true", help="Run the pump test")
