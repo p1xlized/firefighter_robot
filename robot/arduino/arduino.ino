@@ -9,8 +9,11 @@
 #define TrigPin A0  // Trigger pin
 #define EchoPin A1  // Echo pin
 
-// Buzzer Pin
-#define BuzzerPin A3
+// Buzzer Pin on Digital Pin 4
+#define BuzzerPin 4
+
+// LED Pin (Pin 13 for built-in or external LED)
+#define LedPin 13
 
 // State & Speed tracking variables
 bool isMovingForward = false;
@@ -89,14 +92,18 @@ int getDistance()
   return distance;
 }
 
-/* Activate active buzzer */
+/* Activate active buzzer and LED together */
 void activate_buzzer(int durationMs)
 {
   digitalWrite(BuzzerPin, HIGH);
-  Serial.println("Buzzer ON");
+  digitalWrite(LedPin, HIGH);   // Turn LED ON
+  Serial.println("Buzzer & LED ON");
+
   delay(durationMs);
+
   digitalWrite(BuzzerPin, LOW);
-  Serial.println("Buzzer OFF");
+  digitalWrite(LedPin, LOW);    // Turn LED OFF
+  Serial.println("Buzzer & LED OFF");
 }
 
 // Pins initialize
@@ -113,9 +120,12 @@ void init_GPIO()
   pinMode(TrigPin, OUTPUT);
   pinMode(EchoPin, INPUT);
 
-  // Initialize Buzzer Pin
+  // Initialize Buzzer and LED Pins
   pinMode(BuzzerPin, OUTPUT);
   digitalWrite(BuzzerPin, LOW);
+
+  pinMode(LedPin, OUTPUT);
+  digitalWrite(LedPin, LOW);
 
   stop_Stop();
 }
@@ -170,7 +180,7 @@ void loop()
     else if (command == 'R') { go_Right(); isMovingForward = false; }
     else if (command == 'S') { stop_Stop(); isMovingForward = false; }
 
-    // Buzzer Command (Type 'V' to beep)
+    // Buzzer & LED Command (Type 'V' to trigger)
     else if (command == 'V') {
       activate_buzzer(500);
     }
