@@ -20,9 +20,14 @@ Useful commands:
 
 ```bash
 python -m raspberry.main --test       # Test Arduino movement
+python -m raspberry.main --manual     # Control with W/A/S/D in the terminal
 python -m raspberry.main --move F     # Send one movement command
 python -m raspberry.main --no-stream  # Disable MediaMTX publishing
 ```
+
+In manual mode, `W`/`A`/`S`/`D` move forward/left/backward/right, Space stops,
+`1`/`2`/`3` select speed, `P` toggles the pump, `V` triggers the buzzer, `Q`
+starts autonomous fire detection, and `X` exits safely.
 
 Fire email notifications are optional. Set these environment variables before
 starting the robot to enable them. When fire is detected, Python also sends the
