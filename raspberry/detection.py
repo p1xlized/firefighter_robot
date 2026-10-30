@@ -189,6 +189,7 @@ def scan_for_fire(robot: RobotController, frames: Iterator[np.ndarray]) -> str:
     """Turn both ways briefly and choose the side with the strongest target."""
     scores: dict[str, float] = {}
     for direction in ("L", "R"):
+        robot.move("1")
         robot.move(direction)
         deadline = time.monotonic() + SCAN_SECONDS
         score = 0.0
@@ -204,6 +205,7 @@ def scan_for_fire(robot: RobotController, frames: Iterator[np.ndarray]) -> str:
 
     direction = max(scores, key=lambda candidate: scores[candidate])
     print(f"Obstacle avoidance: turning {direction} (fire scores: {scores})")
+    robot.move("1")
     robot.move(direction)
     time.sleep(SCAN_SECONDS)
     robot.move("S")
@@ -219,7 +221,7 @@ def detect_fire(
     camera_command = shutil.which("rpicam-vid") or shutil.which("libcamera-vid")
     frames = rpicam_frames(camera_command) if camera_command else usb_frames(source)
     print("Fire detection started. Press Ctrl+C to stop.")
-    last_command = None
+    last_command: tuple[str, int] | None = None
     found = False
     search_direction = "L"
     search_started = time.monotonic()
@@ -233,7 +235,7 @@ def detect_fire(
             ):
                 print("Obstacle detected. Scanning for the best route.")
                 scan_for_fire(robot, frames)
-                last_command = "S"
+                last_command = ("S", 2)
                 search_started = time.monotonic()
                 continue
 
@@ -279,9 +281,12 @@ def detect_fire(
                 command = search_direction
                 status = f"Searching ({search_direction})"
 
-            if command != last_command:
+            speed = 1 if command in {"L", "R"} else 2
+            command_state = (command, speed)
+            if command_state != last_command:
+                robot.move(str(speed))
                 robot.move(command)
-                last_command = command
+                last_command = command_state
 
             preview = cv2.bitwise_and(frame, frame, mask=mask)
             if center is not None:
