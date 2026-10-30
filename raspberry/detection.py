@@ -20,6 +20,7 @@ CENTER_TOLERANCE_RATIO = 0.10
 SCAN_SECONDS = 0.8
 SEARCH_TURN_SECONDS = 1.2
 PUBLISH_RETRY_SECONDS = 2.0
+MEDIAMTX_CONFIG = os.path.join(os.path.dirname(__file__), "mediamtx.yml")
 LOWER_FIRE = np.array([18, 50, 50], dtype=np.uint8)
 UPPER_FIRE = np.array([35, 255, 255], dtype=np.uint8)
 
@@ -45,11 +46,15 @@ class MediaMtxPublisher:
             return
 
         self.server = subprocess.Popen(
-            ["mediamtx"],
+            ["mediamtx", MEDIAMTX_CONFIG],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
         time.sleep(1.0)
+        if self.server.poll() is not None:
+            print("MediaMTX failed to start; camera streaming disabled.")
+            self.server = None
+            return
         self._start_publisher()
         print(f"MediaMTX WebRTC stream: http://<raspberry-pi-ip>:8889/{path}")
 
